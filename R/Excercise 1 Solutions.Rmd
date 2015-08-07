@@ -1,0 +1,728 @@
+---
+title: "Excercise 1 Collated Solutions"
+author: "Anagh"
+date: "August 7, 2015"
+output: word_document
+---
+
+#Solution 1 
+
+
+# Presidential voting in Georgia        
+
+Read the csv for the voting across counties in Georgia: 
+
+```{r}
+
+
+georgiaData = read.csv('../data/georgia2000.csv')
+
+#Calculate the undercounts and the fraction of undercounts
+
+georgiaData$underCount<-georgiaData$ballots-georgiaData$votes
+georgiaData$underCountPerCent<-round(100*(georgiaData$underCount/georgiaData$ballots),2)
+
+
+```
+
+### Basic Summary
+
+* There are a total of `r length(table(georgiaData$county))`  counties and each county has a different equipment for voting (`r length(table(georgiaData$equip))` different equiments - `r unique(georgiaData$equip)`)
+
+* Out of  `r formatC(sum(georgiaData$ballots),format="d", big.mark=',')` ballots, `r formatC(sum(georgiaData$votes),format="d", big.mark=',')` were counted leading to an undercount of `r round(sum(georgiaData$underCount)*100/sum(georgiaData$ballots),2)`% in Georgia 
+
+
+* The county of `r georgiaData[which.max(georgiaData$underCount),1]` has the highest undercounts with `r formatC(max(georgiaData$underCount),format="d", big.mark=',')` which constitutes to `r round(100*max(georgiaData$underCount)/georgiaData[which.max(georgiaData$underCount),2],2)` % of the total ballots casted in the county 
+
+
+* The county of `r georgiaData[which.max(georgiaData$underCountPerCent),1]` has the highest proportion of  undercounts 
+with `r max(georgiaData$underCountPerCent)`% out of  `r formatC(georgiaData[which.max(georgiaData$underCountPerCent),2],format="d", big.mark=',')` ballots casted in the county
+
+
+
+
+```{r}
+summary(georgiaData)
+
+hist(georgiaData$underCountPerCent, main = "Distribution of undercount percentage ", ylab="Number of counties",xlab = "Undercount Percent",col = "blue")
+
+```
+
+
+### Deciphering the reasons of vote undercount
+
+* We aggregate on the type of equipment to understand which equipment is responsible for most number of invalid votes
+
+    + Optical has the highest and Paper based equipment has the least number of vote undercounts 
+    + When we normalize using the number of ballots in each equipment, we realize that punch has the highest % of undercounts as compared to optical (which has the least)
+    + This means optical has the highest undercount as a absolute number because it is the most used equipment too
+    + We can infer (from the histogram) that people have issues with interpreting the PUNCH and LEVER ballot system as compared to others
+  
+```{r}
+
+adf= aggregate(cbind(ballots,votes)~equip,data=georgiaData,sum)
+adf$ucPercent<-100*(adf$ballots-adf$votes)/(adf$ballots)
+
+
+barplot((adf$ballots-adf$votes),col="blue",main="Number of Undercounts across equipments",names.arg = adf$equip,xlab = "Equipment",ylab = "Number of vote undercount")
+
+barplot(adf$ucPercent,col="blue",main="% Undercounts across equipments",names.arg = adf$equip,xlab = "Equipment",ylab = "Percentage vote undercount")
+
+
+```
+
+
+### Impact on the poor and minority communities 
+
+```{r}
+
+poorGeorgia<-georgiaData[georgiaData$poor==1,]
+
+poordf=aggregate(cbind(ballots,votes)~equip,data=poorGeorgia,sum)
+poordf$ucPercent<-100*(poordf$ballots-poordf$votes)/(poordf$ballots)
+
+poordf
+
+
+richGeorgia<-georgiaData[georgiaData$poor==0,]
+
+richdf=aggregate(cbind(ballots,votes)~equip,data=richGeorgia,sum)
+richdf$ucPercent<-100*(richdf$ballots-richdf$votes)/(richdf$ballots)
+
+richdf=rbind(richdf,c("PAPER",0,0,0))
+richdf=rbind(richdf[1:2,],richdf[4,],richdf[3,])
+
+richdf
+```
+
+### Observations 
+
+* Counties with higher percentage of poor people have higher undercounts irresective of equipment they use 
+* Optical seems to have the highst difference between the richer counties as compared to poor counties
+
+```{r}
+
+
+
+barplot(matrix(c(as.numeric(poordf$ucPercent),as.numeric(richdf$ucPercent)),nr=2,byrow = TRUE), beside=T, col=c("blue","grey"),names.arg=poordf$equip,xlab="Equipment",ylab="% Undercount",main="Poor vs Non Poor Undercount")
+
+legend("topleft", c("Poor","Non Poor"), pch=15, 
+       col=c("blue","grey"))
+
+
+
+```
+
+
+
+```{r fig.width=10, fig.height=6.5}
+
+
+attach(georgiaData)
+
+plot(x=perAA,y=underCountPerCent,main="Distribution of %vote undercount with percentage of African - American Population",col="red3",pch=19)
+
+plot(x=perAA,y=underCountPerCent,main="Distribution of %vote undercount with percentage of African - American Population",pch=19,col=c("red","blue","green","yellow")[equip],xlab="African American Population",ylab="Vote undercount % ")
+
+legend(x="topright", legend = levels(georgiaData$equip), col=c("red","blue","green","yellow"), pch=19)
+
+detach(georgiaData)
+```
+
+* There does not seem to have much of an impact of the percentage of African Americans on the %of vote undercount
+* Majority of the counties with higher African American Population have Lever and Optical equioments for ballots 
+* Many counties having higher african american population and comparitavely high vote undercount generally use optical or lever based equiments
+
+
+#Solution2
+
+
+### Downloading the data and return over each stock 
+
+* Download data for stock price at a daily level using tickers 
+* Create a helper function to calculate the return at a daily level
+
+
+```{r,  message=FALSE}
+
+library(mosaic)
+library(fImport)
+library(foreach)
+
+# Import stocks based on tickers
+
+mystocks = c("SPY","TLT","LQD","EEM","VNQ")
+myprices = yahooSeries(mystocks, from='2010-07-30', to='2015-07-30')
+
+# Function for calculating percent returns from a Yahoo Series
+
+YahooPricesToReturns = function(series) 
+  {
+  	mycols = grep('Adj.Close', colnames(series))
+  	closingprice = series[,mycols]
+  	N = nrow(closingprice)
+  	percentreturn = as.data.frame(closingprice[2:N,]) / as.data.frame(closingprice[1:(N-1),]) - 1
+  	mynames = strsplit(colnames(percentreturn), '.', fixed=TRUE)
+  	mynames = lapply(mynames, function(x) return(paste0(x[1], ".PctReturn")))
+  	colnames(percentreturn) = mynames
+  	as.matrix(na.omit(percentreturn))
+}
+
+# Compute the returns from the closing prices
+myreturns = YahooPricesToReturns(myprices)
+```
+
+### Gauging the portfolio profitability
+
+* Returns of each stock/ticker can be gauged by looking at the distribution of each of their return distribution
+* Higher the mean of the return means it is more rofitable
+* Lower the 5th quantile (left tail of distribution) higher the risk realted to the stock/portfolio
+* Let us look at return distribution of each ticker and take a call on the risk/return profiles for each
+
+
+```{r}
+# Identity matrix (used for weights) for each iteration
+
+wmatrix=diag(5)
+
+
+for (j in 1:5)
+{    
+    n_days=20
+    set.seed(11)
+    
+    # Now simulate many different possible trading years!
+    sim1 = foreach(i=1:500, .combine='rbind') %do% {
+    	totalwealth = 100000
+      
+    	#Simulate return of each stock
+    	weights = wmatrix[j,]
+    	
+    	holdings = weights * totalwealth
+    	wealthtracker = rep(0, n_days) # Set up a placeholder to track total wealth
+    
+    		for(today in 1:n_days) 
+      {
+    		return.today = resample(myreturns, 1, orig.ids=FALSE)
+    		holdings = holdings + holdings*return.today
+    		totalwealth = sum(holdings)
+    		wealthtracker[today] = totalwealth
+      	holdings = weights * totalwealth
+    		
+    	}
+    	
+    	wealthtracker
+    }
+    
+    head(sim1)
+    
+    # Profit/loss
+    if(j==1) hist(sim1[,n_days]- 100000,col=rgb(j,0,0,1/4),main="Histogram of 20 day return",xlim=c(-20000,20000),ylim=c(0,200)) 
+    
+    else hist(sim1[,n_days]- 100000,col=rgb(j/10,0,0,1/5),add=T,main="Histogram of 20 day return",xlim=c(-20000,20000),ylim=c(0,200))
+    
+    cat(mystocks[j],"\n")
+    
+    # Calculate 5% value at risk
+    cat("5% : ",quantile(sim1[,n_days], 0.05) - 100000)
+    
+    # Mean
+    cat("\nMean : ",mean(sim1[,n_days]- 100000))
+    
+    # SD
+    cat("\nStandard Deviation : ",sd(sim1[,n_days]- 100000))
+    
+    # Calculate 5% value at risk
+    cat("\n95 percentile : ",quantile(sim1[,n_days], 0.95) - 100000)
+    
+    cat("\n\n")
+}   
+
+```
+
+
+
+
+### Risk Return profiles of each of the stocks
+
+* The risk / return of a stock can be gauged by the mean return within a period of time (20 days in this case)
+* Bootstrapping can be used to understand the distribution of r eturn profile which can be understood by the standard deviation, the 5th and 95th percentile return 
+
+  + LQD is the safest stock option. By safe, it means that there is minimal risk of losses (5 percentile loss of 2.3k on 100,000$ investment), though the scope for profit is less. The mean profit over a 20 day period is also low at 475.8$
+
+  + SPY is the second most safe option among the five, with a return of 1363$ in a 20 day period on a 100,000$ investment and a loss profile of -5,817$ at the lowest 5% times 
+
+* TLT is the third most safe stock among the five with a mean return of 559$ over a 20day period on investment of $100,000. The 5% return is a loss of close to 6994$ and a standard deviation of 4619$
+
+* VNQ is the second most volatile stock among the options (5 presented in the portfolio). It has an average return of close to 1249$ on a investment of 100,000$ over a 20 day period
+
+* EEM is the most volatile stock among the others in the portfolio with a 5% returns greater than 9695$ in losses. But having said that in its good days it can go upto $10,000 and higher (95% ercentile) in profits. The standard deviation of this stock is very varied, thus havig a high standard deviation  
+
+
+
+```{r}
+
+x=matrix(c(0.2, 0.2, 0.2, 0.2, 0.2,.1,.1,.8,0,0,0,0,0,.5,.5),nrow=3,byrow = T)
+    
+portfolio=c("Equal Split","Safe Portfolio","Aggresive Portfolio")
+
+for (z in 1:3)
+{
+    n_days=20
+ 
+  sim1 = foreach(i=1:500, .combine='rbind') %do% {
+	totalwealth = 100000
+	weights = x[z,]
+	holdings = weights * totalwealth
+	wealthtracker = rep(0, n_days) # Set up a placeholder to track total wealth
+
+		for(today in 1:n_days) 
+  {
+		return.today = resample(myreturns, 1, orig.ids=FALSE)
+		holdings = holdings + holdings*return.today
+		totalwealth = sum(holdings)
+		wealthtracker[today] = totalwealth
+	}
+	
+	wealthtracker
+  }
+  
+
+            # Profit/loss
+        hist(sim1[,n_days]- 100000,col=rgb(1,0,0,1/4),main = portfolio[z],xlab=" $ Return") 
+     
+        cat(portfolio[z],"\n")
+        
+        # Calculate 5% value at risk
+        cat("5% : ",quantile(sim1[,n_days], 0.05) - 100000)
+        
+        # Mean
+        cat("\nMean : ",mean(sim1[,n_days]- 100000))
+        
+        # SD
+        cat("\nStandard Deviation : ",sd(sim1[,n_days]- 100000))
+        
+        # Calculate 5% value at risk
+        cat("\n95 percentile : ",quantile(sim1[,n_days], 0.95) - 100000)
+        
+        cat("\n\n")
+}
+```
+
+### Portfolio 1 
+### Even Split (20%) across all the stocks 
+
+* For an equal split portfolio, the returns is a combinaton of the risk profiles of all the stocks
+* The average return over 20 days on an investment of $100,000 is about $833
+* 5% of the times a person holding this portfolio may incur losses of 3566$ 
+
+
+
+### Portfolio 2 
+### Safe portfolio  (atleast 3 stocks)
+
+* For a safe portfolio, we choose the safest option as the highest amount in terms of investment. LQD (80%) and the other safe (comparitavely safe) stocks 10% each (SPY and TLT)
+
+* It is safe in the sense that there is only 5% chances of losing more than $2211 
+
+* But having said that there is not much scope of earning high returns. Only 5% earn more than 3007$ and on an average earn about 400$ over 20 days on an investment of $100,000
+
+
+### Portfolio 3 
+### Aggressive portfolio  (atleast 2 stocks)
+
+* For an aggressive portfolio, we choose the two most volatile stocks - EEM and VNQ and have a split of 50-50% 
+* The mean return is about 692$ with 5% of people gaining close to 9059$
+* Having said that the losses are also pretty steep with more 5% of the people losing close to 8026$ or more
+
+
+
+#Solution 3
+
+```{r}
+library(ggplot2)
+wineData<- read.csv('../data/wine.csv')
+
+# Reading only the attributes data and not the red/white or quality data 
+# Because this is an unsupervised learning problem
+
+wineData2 = wineData[,1:11]
+
+
+```
+
+### PCA on the wine attribute data
+
+* The first 4 prinicipal components explain close to 73-74% of the variance as seen from the summary(Cumulative proportion) below
+
+```{r, echo=FALSE}
+
+winePCA = prcomp(wineData2, center.=TRUE,scale.=TRUE)
+summary(winePCA)
+
+library(RColorBrewer)
+library(scales)
+
+plot(winePCA,type="line")
+
+biplot(winePCA)
+
+loadings = winePCA$rotation
+loadings
+
+```
+
+* Split of red vs white wines across the two principal components 
+* It is observed that the principal component analysis can be used to distinguish red and white wine
+
+```{r, echo=FALSE}
+
+
+scores = winePCA$x
+par( mfrow = c( 1,1  ) )
+
+qplot(scores[,1], scores[,2],
+      color=wineData$color,alpha=I(0.5), xlab='Component 1', ylab='Component 2',main = "Split of wine (by color) across principal components")
+
+
+
+```
+
+
+* The major contributors/distingiushers within principal component 1 are :
+
+```{r}
+
+o1 = order(loadings[,1])
+colnames(wineData2)[head(o1,3)]
+colnames(wineData2)[tail(o1,3)]
+
+
+```
+
+* We can validate this using boxplots.
+* From the graph below we can validate that pc1 components actually differentiate between red and white wine (Looking back at the data, there is a clear distinction of the values for these metrics)
+
+```{r, echo=FALSE}
+
+wineData$colnum<- as.numeric(wineData$color=="red")
+
+par( mfrow = c( 2,2  ) )
+
+boxplot(wineData[,2] ~wineData$colnum,xlab='volatile.acidity', ylab='color',main='wine color by Cluster')
+boxplot(wineData[,10] ~wineData$colnum,xlab='sulphates', ylab='color',main='wine color by Cluster')
+boxplot(wineData[,5] ~wineData$colnum,xlab='chlorides', ylab='color',main='wine color by Cluster')
+
+```
+
+
+* The MAJOR contributors of principal component 2 are
+```{r}
+
+o2 = order(loadings[,2])
+colnames(wineData2)[head(o2,3)]
+colnames(wineData2)[tail(o2,3)]
+
+```
+
+* From the graph below we can see that the main components making pc2 cannot differentiate between red and white wine.
+
+```{r, echo=FALSE}
+
+wineData$colnum<- as.numeric(wineData$color=="red")
+
+
+par( mfrow = c( 2,2  ) )
+
+boxplot(wineData[,11] ~wineData$colnum,
+        xlab='alcohol', ylab='color',
+        main='wine color by Cluster')
+
+
+
+boxplot(wineData[,6] ~wineData$colnum,
+        xlab='pH', ylab='color',
+        main='wine color by Cluster')
+
+
+
+boxplot(wineData[,9] ~wineData$colnum,
+        xlab='free sulphur dioxide', ylab='color',
+        main='wine color by Cluster')
+
+
+```
+
+
+###Verifying if pca can distinguish quality of the wine
+
+* We cannot see any clear clustering of of the 9 different qualities of wine across any of the component projection (which can be understood as a 2D view of a n dimensional space)
+
+
+```{r}
+  
+  comp <- data.frame(winePCA$x[,1:4])
+  palette(alpha(brewer.pal(6,'Set3'), 0.15))
+  plot(comp, col=wineData$quality, pch=19)
+
+```
+
+
+## Hierarchical clustering
+
+* Calculating the distance matrix using euclidean method and clustering the distance matrix with ward method.
+
+```{r, echo=FALSE}
+
+  wine_scaled <- scale(wineData2, center=TRUE, scale=TRUE) 
+
+  wine_distance_matrix = dist(wine_scaled, method='euclidean')
+  hier_wine = hclust(wine_distance_matrix, method='ward.D')
+  plot(hier_wine, cex=0.8)
+
+```
+
+* Using k=4 we select 4 clusters on the basis of the above plotted dendrogram
+
+  ```{r}
+
+  cluster1 = cutree(hier_wine, k=4)
+  summary(factor(cluster1))
+
+```
+
+* The summary function gives us the number of objects in each cluster
+* We can identify the number of red or white wines in each cluster using the table function
+
+
+```{r}
+
+  table(wineData[which(cluster1 == 1),13])
+
+```
+The above cluster is predominantly         with an error of 
+```{r}
+
+  table(wineData[which(cluster1 == 2),13])
+
+```
+The above cluster is predominantly         with an error of 
+```{r}
+
+  table(wineData[which(cluster1 == 3),13])
+
+```
+The above cluster is predominantly         with an error of 
+```{r}
+
+  table(wineData[which(cluster1 == 4),13])
+
+```
+The above cluster is predominantly         with an error of 
+
+```{r}
+
+  table(wineData$quality)
+
+```
+
+* The table above provides a summary of the number of wines of each quality.
+* It is seen that most data points lie in the values 5 to 7
+
+
+###Verifying if clustering can distinguish quality of the wine
+
+* Verifying the components of each cluster for quality
+```{r}
+
+table(wineData[which(cluster1 == 1),12])
+table(wineData[which(cluster1 == 2),12])
+
+```
+
+```{r}
+
+table(wineData[which(cluster1 == 3),12])
+
+```
+
+
+* There is not much decipherable difference in the clusters with respect to quality, referring to a boxplot to confirm the same 
+
+```{r}
+
+table(wineData[which(cluster1 == 4),12])
+
+```
+
+* It is seen that the quality also cannot be accurately inferred from the clustering method in use
+
+```{r}
+
+  boxplot(wineData$quality ~ cluster1,
+        xlab='Cluster', ylab='quality',
+        main='wine quality by Cluster')
+```
+
+
+
+* It can be inferred that although both PCA and clustering can differentiate red wine from white wine though none of the methods though gave any answer in regards to the quality of wine
+
+
+
+#Solution 4
+
+### Data Cleaning 
+
+* Our major aim is to categorize the people into market segments based on interests and subject of tweets rather than number 
+* So we have to normalize with the number of tweets (i.e. across rows)
+
+
+```{r}
+
+set.seed(3)
+
+sData = read.csv('../data/social_marketing.csv')
+sData2=sData[,-1]
+
+sData3 = sData2/rowSums(sData2)
+
+scaleData=scale(sData3, center=TRUE, scale=TRUE)
+
+```
+
+
+### Find optimum number of clusters
+
+* Because this is ia unsupervised method and we have no idea about the expected number of clusters, we will do compute the CH index and find the optimum number of clusters which 
+
+* Looking at the graph for CH vs K graph there seems to be 2/3 probable values of K. K=3,5 & 6 
+
+* We can look at each of the splits and looking at the attributes which kind of segmentation makes more sense (actionable for the company)in a business context
+
+```{r,include=FALSE, cache=FALSE}
+
+kmax= 15
+
+n=nrow(scaleData)
+ch = numeric(length=kmax-1)
+
+for (k in (2:kmax))
+{
+  kmc =kmeans (scaleData,k, nstart =50)
+  w = kmc$tot.withinss
+  b = kmc$betweenss
+  ch[k-1] = (b/(k-1))/(w/(n-k))
+  
+}
+```
+
+
+```{r}
+plot(2:kmax,ch, xlab='K', ylab='CH(K)', type='b',main='K-Means Clustering : CH Index vs K' )
+
+```
+
+### Number of segments = 3 
+
+* We take top characteristics from the clusters and try 
+
+* 3 Clusters doesnt seem a very good looking idea looking at the top cluster factors, they do not seem very intuitive in the sense of defininf a specific category of people
+
+* Other take aways : 
+  + Photosharing and Chatter are somethings which is common across clusters and can be understood as the basic activity within the twitter media for all kinds of people
+  + So for inferring regarding market segments we can regarded as not valuable because that is not something which clearly defines a segment
+
+```{r}
+
+kmcf =kmeans(scaleData,3, nstart =50)
+
+clust1= subset(sData2,kmcf$cluster==1)
+head(sort(sapply(clust1,mean),decreasing = TRUE),n=8)
+
+
+clust2= subset(sData2,kmcf$cluster==2)
+head(sort(sapply(clust2,mean),decreasing = TRUE),n=8)
+  
+clust3= subset(sData2,kmcf$cluster==3)
+head(sort(sapply(clust3,mean),decreasing = TRUE),n=8)
+  
+
+```
+
+### Number of segments = 6
+
+* Cluster/Segment 1 
+  
+  + Looking at the major themes that is tweeted by this cluster of customers (Cooking,fashion, beauty, healthy nutrition shopping ), it seems that they are very likely to be health and fitness, fashion concious probably younger women 
+  + This is a very good segment for the company to tap into for targeted marketing
+
+```{r}
+
+kmcf =kmeans(scaleData,6, nstart =50)
+
+clust1= subset(sData2,kmcf$cluster==1)
+head(sort(sapply(clust1,mean),decreasing = TRUE),n=8)
+```
+
+
+* Cluster/Segment 2
+
+  + The major themes (religion, parenting , family, sports) point towards middle aged people with families children who might be a good target for special family offers / back to school offers 
+
+
+```{r}
+
+clust2= subset(sData2,kmcf$cluster==2)
+head(sort(sapply(clust2,mean),decreasing = TRUE),n=8)
+
+```  
+
+* Cluster/Segment 3
+
+  + The major themes other than photosharing and chatter do not give any idiosncracy as such. Though movies and shopping are a bit prominent but not as high as other dominant themes in other clusters
+  + Most probably these are people who donot have any specific tatstes / interests and generally use twitter intermittently and generically
+  + This may not be a very good segment to tap into because they do not have any specific interests to cater to other than shopping 
+
+```{r}
+
+clust3= subset(sData2,kmcf$cluster==3)
+head(sort(sapply(clust3,mean),decreasing = TRUE),n=8)
+```  
+  
+  
+* Cluster/Segment 4
+
+  + Major themes (Health Nutrition, Personal Fitness, cooking , Outdoor , Food) point towards a very health concious group (may be middle aged men) which can be tapped into because the companys wants to promote its healthy products
+  
+```{r}
+
+clust4= subset(sData2,kmcf$cluster==4)
+head(sort(sapply(clust4,mean),decreasing = TRUE),n=8)
+```
+
+* Cluster/Segment 5
+
+  + Most frequent tweeted topics include politics, news, travel , automotive. This group seems to be middle aged well settled citizens who have strong opinions on the news, politics
+  + They do not seem an obvious choice but can be converted if a special product is launched specifically targetting them
+  
+
+```{r}
+  
+clust5= subset(sData2,kmcf$cluster==5)
+head(sort(sapply(clust5,mean),decreasing = TRUE),n=8)
+
+```  
+
+* Cluster/Segment 6
+
+  + Based on themes(College univ, online gaming ,sport playing) it can be inferred these are college students and can be targetted with special offers for students 
+
+
+```{r}
+
+clust6= subset(sData2,kmcf$cluster==6)
+head(sort(sapply(clust6,mean),decreasing = TRUE),n=8)
+
+```
+
