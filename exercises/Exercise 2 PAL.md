@@ -2,7 +2,7 @@
 title: "Exercise 2.1"
 author: "Anagh"
 date: "August 17, 2015"
-output: html_document
+output: word_document
 ---
 
 
@@ -270,6 +270,17 @@ result1$pred_auth <- result[,51]
 
 ```r
 library(caret)
+```
+
+```
+## Warning: package 'caret' was built under R version 3.2.2
+```
+
+```
+## Loading required package: lattice
+```
+
+```r
 confusionMatrix(result1$pred_auth,result1$auth)
 ```
 
@@ -674,7 +685,14 @@ author_test=author[2501:5000,]
 
 ```r
 library(randomForest)
+```
 
+```
+## randomForest 4.6-10
+## Type rfNews() to see new features/changes/bug fixes.
+```
+
+```r
 set.seed(3)
 authorRF=randomForest(auth~.,data=author_train)
 preds=predict(authorRF,newdata=author_test)
@@ -1031,7 +1049,7 @@ inspect(grules)
 ```
 
 ```
-## Error in UseMethod("inspect", x): no applicable method for 'inspect' applied to an object of class "c('rules', 'associations')"
+## NULL
 ```
 
 
@@ -1072,7 +1090,27 @@ inspect(grules1)
 ```
 
 ```
-## Error in UseMethod("inspect", x): no applicable method for 'inspect' applied to an object of class "c('rules', 'associations')"
+##    lhs                     rhs                    support confidence     lift
+## 1  {curd,                                                                    
+##     yogurt}             => {whole milk}       0.010066090  0.5823529 2.279125
+## 2  {curd,                                                                    
+##     other vegetables}   => {whole milk}       0.009862735  0.5739645 2.246296
+## 3  {butter,                                                                  
+##     yogurt}             => {whole milk}       0.009354347  0.6388889 2.500387
+## 4  {butter,                                                                  
+##     other vegetables}   => {whole milk}       0.011489578  0.5736041 2.244885
+## 5  {domestic eggs,                                                           
+##     other vegetables}   => {whole milk}       0.012302999  0.5525114 2.162336
+## 6  {root vegetables,                                                         
+##     whipped/sour cream} => {whole milk}       0.009456024  0.5535714 2.166484
+## 7  {citrus fruit,                                                            
+##     root vegetables}    => {other vegetables} 0.010371124  0.5862069 3.029608
+## 8  {root vegetables,                                                         
+##     tropical fruit}     => {other vegetables} 0.012302999  0.5845411 3.020999
+## 9  {root vegetables,                                                         
+##     tropical fruit}     => {whole milk}       0.011997966  0.5700483 2.230969
+## 10 {root vegetables,                                                         
+##     yogurt}             => {whole milk}       0.014539908  0.5629921 2.203354
 ```
 
 
